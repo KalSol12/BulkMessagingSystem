@@ -8,6 +8,7 @@ public class ImportResultDto
     public List<ImportErrorDto> Errors { get; set; } = new();
 }
 
+
 public class ImportErrorDto
 {
     public int Line { get; set; }

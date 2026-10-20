@@ -199,7 +199,7 @@ public class ContactsController : ControllerBase
             .ToListAsync();
 
         var seenPhones = new HashSet<string>(
-            existingPhones.Select(PhoneNormalizer.Normalize),
+            existingPhones.Select(phone => PhoneNormalizer.Normalize(phone)),
             StringComparer.OrdinalIgnoreCase);
 
         var toInsert = new List<Contact>();

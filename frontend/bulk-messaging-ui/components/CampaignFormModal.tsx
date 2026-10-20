@@ -9,12 +9,14 @@ interface Props {
   open: boolean
   groupName: string
   contacts: Contact[]
+  selectedContactIds?: Set<number>
   onClose: () => void
   submitLabel?: string
   onSubmit: (data: {
     channel: Channel
     subject?: string
     body: string
+    contactIds?: number[]
   }) => Promise<void>
 }
 
@@ -31,6 +33,7 @@ export function CampaignFormModal({
   open,
   groupName,
   contacts,
+  selectedContactIds,
   onClose,
   submitLabel = 'Save draft',
   onSubmit,
@@ -40,6 +43,11 @@ export function CampaignFormModal({
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Filter contacts based on selection
+  const targetContacts = selectedContactIds && selectedContactIds.size > 0
+    ? contacts.filter(c => selectedContactIds.has(c.id))
+    : contacts
 
   useEffect(() => {
     if (open) {
@@ -52,7 +60,7 @@ export function CampaignFormModal({
   }, [open])
 
   // Sample contact for preview
-  const sampleContact = contacts[0] ?? null
+  const sampleContact = targetContacts[0] ?? null
 
   const previewBody = useMemo(
     () => renderTemplate(body, sampleContact),
@@ -61,10 +69,10 @@ export function CampaignFormModal({
 
   // Count valid recipients for the chosen channel
   const recipientCount = useMemo(() => {
-    return contacts.filter(c =>
+    return targetContacts.filter(c =>
       channel === Channel.Email ? !!c.email : !!c.phone,
     ).length
-  }, [contacts, channel])
+  }, [targetContacts, channel])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -93,6 +101,9 @@ export function CampaignFormModal({
         channel,
         subject: channel === Channel.Email ? subject.trim() : undefined,
         body: body.trim(),
+        contactIds: selectedContactIds && selectedContactIds.size > 0
+          ? Array.from(selectedContactIds)
+          : undefined,
       })
       onClose()
     } catch (err: any) {

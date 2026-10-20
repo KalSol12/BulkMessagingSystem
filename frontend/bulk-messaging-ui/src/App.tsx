@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowUpDown, CalendarDays, ChevronDown, Download, Eye, FileText, Pencil, Phone, Plus, Search, SlidersHorizontal, Trash2, Users, Mail } from 'lucide-react'
+import { ArrowLeft, ArrowUpDown, CalendarDays, ChevronDown, Download, Eye, FileText, Pencil, Phone, Plus, Search, SlidersHorizontal, Trash2, Users, Mail, Send, X } from 'lucide-react'
 import { authApi, groupsApi, contactsApi, campaignsApi, setAccessToken } from './api'
 import type { AuthUser, Group, Contact, ImportResult } from './api'
 import { GroupFormModal } from '../components/GroupFormModal'
@@ -18,45 +18,74 @@ import { Dashboard } from './components/Dashboard'
 import { AdminUsers, ChangePasswordScreen, LoginScreen } from './components/AuthScreens'
 import { btnPrimary, btnSecondary, btnGhost } from './styles/theme'
 
-type Page =
-  | 'dashboard'
-  | 'groups'
-  | 'outbox'
-  | 'inbox'
-  | 'blacklist'
+      <div
+        style={layout}
+        className={currentPage === 'groups' && selectedGroup ? 'groups-layout' : undefined}
+      >
+        {currentPage === 'groups' && selectedGroup && (
+          <aside className="groups-sidebar" aria-label="Contact groups">
+            <div className="groups-sidebar-heading">
+              <div>
+                <span className="groups-sidebar-kicker">CONTACT LISTS</span>
+                <div className="groups-sidebar-title">
+                  <Users size={17} />
+                  <span>Groups</span>
+                  <span className="groups-sidebar-count">{groups.length}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="groups-sidebar-create"
+                title="Create group"
+                aria-label="Create group"
+                onClick={() => {
+                  setEditingGroup(null)
+                  setGroupModalOpen(true)
+                }}
+              >
+                <Plus size={17} />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="groups-sidebar-new"
   | 'settings'
   | 'admin'
 
 function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
-  const [authLoading, setAuthLoading] = useState(true)
+              <Plus size={16} /> New group
   const [groups, setGroups] = useState<Group[]>([])
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [checkedGroupId, setCheckedGroupId] = useState<number | null>(null)
-  const [contacts, setContacts] = useState<Contact[]>([])
-  const [loading, setLoading] = useState(false)
+              <div className="groups-sidebar-search">
+                <Search size={16} aria-hidden="true" />
   const [loadingContacts, setLoadingContacts] = useState(false)
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+                  aria-label="Search groups"
 
   // Navigation
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
 
   // Modal state
   const [groupModalOpen, setGroupModalOpen] = useState(false)
-  const [editingGroup, setEditingGroup] = useState<Group | null>(null)
+                    type="button"
+                    className="groups-sidebar-clear"
   const [contactModalOpen, setContactModalOpen] = useState(false)
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
+                    aria-label="Clear group search"
 
-  // Confirm dialog
+                    <X size={14} />
   const [confirmState, setConfirmState] = useState<{
     open: boolean
     title: string
     message: string
     confirmText?: string
-    onConfirm: () => Promise<void> | void
+            <div className="groups-sidebar-list">
   }>({
-    open: false,
+                <div className="groups-sidebar-empty">
     title: '',
     message: '',
     onConfirm: () => {},
@@ -66,115 +95,48 @@ function App() {
   // Import result
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importFileName, setImportFileName] = useState('')
-  const [importModalOpen, setImportModalOpen] = useState(false)
-
-  // Search
-  const [searchQuery, setSearchQuery] = useState('')
-  const [groupSearch, setGroupSearch] = useState('')
-
-  // Campaigns
-  const [campaignModalOpen, setCampaignModalOpen] = useState(false)
+                    className={`groups-sidebar-row${isSelected ? ' is-selected' : ''}`}
   const [sendCampaignImmediately, setSendCampaignImmediately] = useState(false)
-  const [campaignDetailId, setCampaignDetailId] = useState<number | null>(null)
-  const [campaignDetailOpen, setCampaignDetailOpen] = useState(false)
-
-  const toast = useToast()
-
+                    <button
+                      type="button"
+                      className="groups-sidebar-select"
+                      aria-pressed={isSelected}
+                      onClick={() => setSelectedGroup(g)}
+                    >
+                      <span className="groups-sidebar-name">{g.name}</span>
+                      {g.description && (
+                        <span className="groups-sidebar-description">{g.description}</span>
+                      )}
+                    </button>
   useEffect(() => {
-    const token = sessionStorage.getItem('bulk-messaging-access-token')
-    if (!token) {
-      setAuthLoading(false)
-      return
-    }
-
-    authApi.me()
-      .then(setAuthUser)
-      .catch(() => setAccessToken(null))
-      .finally(() => setAuthLoading(false))
-  }, [])
-
-  useEffect(() => {
-    const handleUnauthorized = () => setAuthUser(null)
-    window.addEventListener('bulk-messaging-unauthorized', handleUnauthorized)
-    return () => window.removeEventListener('bulk-messaging-unauthorized', handleUnauthorized)
-  }, [])
-
-  // Load groups after authentication
-  useEffect(() => {
-    if (authUser) void loadGroups()
-  }, [authUser])
-
-  // Load contacts when selection changes
-  useEffect(() => {
-    if (!selectedGroup) return
-    setSearchQuery('')
-    loadContacts(selectedGroup.id)
-  }, [selectedGroup])
-
-  async function loadGroups() {
-    try {
-      setLoading(true)
-      const data = await groupsApi.list()
-      setGroups(data)
-      setError(null)
+                      <span className="groups-sidebar-contact-count">{g.contactCount}</span>
     } catch (e: any) {
       setError('Failed to load groups: ' + e.message)
+                      type="button"
+                      className="groups-sidebar-delete"
     } finally {
       setLoading(false)
     }
   }
-
-  async function loadContacts(groupId: number) {
-    try {
-      setLoadingContacts(true)
-      const data = await contactsApi.listByGroup(groupId)
-      setContacts(data)
     } catch (e: any) {
+                      aria-label={`Delete ${g.name}`}
       setError('Failed to load contacts: ' + e.message)
-    } finally {
+                      <Trash2 size={15} />
       setLoadingContacts(false)
     }
   }
 
   // ---------- Derived data ----------
-
-  const filteredGroups = groups.filter(g => {
-    if (!groupSearch.trim()) return true
-    const q = groupSearch.trim().toLowerCase()
-    return (
-      g.name.toLowerCase().includes(q) ||
-      (g.description?.toLowerCase().includes(q) ?? false)
-    )
-  })
-
-  const filteredContacts = contacts.filter(c => {
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.trim().toLowerCase()
-    return (
-      (c.name?.toLowerCase().includes(q) ?? false) ||
-      c.phone.toLowerCase().includes(q) ||
-      (c.email?.toLowerCase().includes(q) ?? false) ||
-      (c.notes?.toLowerCase().includes(q) ?? false)
-    )
-  })
-
+              {!loading && filteredGroups.length === 0 && (
+                <div className="groups-sidebar-empty">
+                  {groups.length > 0 ? `No groups match "${groupSearch}"` : 'No groups yet'}
+                </div>
   // ---------- Navigation ----------
 
   function handleNavigate(page: Page) {
-    setCurrentPage(page)
-    if (page === 'groups') {
-      setSelectedGroup(null)
-      setContacts([])
-      setCheckedGroupId(null)
-    }
-  }
-
-  // ---------- Groups ----------
-
-  async function handleGroupSubmit(name: string, description: string) {
-    if (editingGroup) {
-      await groupsApi.update(editingGroup.id, name, description)
-      await loadGroups()
+            <div className="groups-sidebar-footer">
+              Showing {filteredGroups.length} of {groups.length} groups
+            </div>
       if (selectedGroup?.id === editingGroup.id) {
         setSelectedGroup({ ...selectedGroup, name, description })
       }
@@ -346,6 +308,7 @@ function App() {
     channel: 0 | 1
     subject?: string
     body: string
+    contactIds?: number[]
   }) {
     if (!selectedGroup) return
     const campaign = await campaignsApi.create(selectedGroup.id, data)
@@ -357,6 +320,7 @@ function App() {
     } else {
       toast.success('Campaign draft created')
     }
+    setSelectedContactIds(new Set())
   }
 
   async function openSendCampaign(group: Group) {
@@ -774,6 +738,40 @@ function App() {
                             <><Download size={16} /> Import CSV/XLSX</>
                           )}
                         </button>
+                        <button
+                          style={{
+                            ...btnPrimary,
+                            padding: '10px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                          onClick={() => {
+                            // Clear selection to send to all
+                            setSelectedContactIds(new Set())
+                            setSendCampaignImmediately(true)
+                            setCampaignModalOpen(true)
+                          }}
+                        >
+                          <Send size={16} /> Send to all ({contacts.length})
+                        </button>
+                        {selectedContactIds.size > 0 && (
+                          <button
+                            style={{
+                              ...btnPrimary,
+                              padding: '10px 16px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                            }}
+                            onClick={() => {
+                              setSendCampaignImmediately(true)
+                              setCampaignModalOpen(true)
+                            }}
+                          >
+                            <Send size={16} /> Send to selected ({selectedContactIds.size})
+                          </button>
+                        )}
                       </div>
                     </header>
 
@@ -813,6 +811,19 @@ function App() {
                         <table style={table}>
                           <thead>
                             <tr>
+                              <th style={{ ...th, width: 40 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={filteredContacts.length > 0 && selectedContactIds.size === filteredContacts.length}
+                                  onChange={e => {
+                                    if (e.target.checked) {
+                                      setSelectedContactIds(new Set(filteredContacts.map(c => c.id)))
+                                    } else {
+                                      setSelectedContactIds(new Set())
+                                    }
+                                  }}
+                                />
+                              </th>
                               <th style={th}>Name</th>
                               <th style={th}>Phone</th>
                               <th style={th}>Email</th>
@@ -823,6 +834,21 @@ function App() {
                           <tbody>
                             {filteredContacts.map(c => (
                               <tr key={c.id} className="contact-row">
+                                <td style={contactTd}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedContactIds.has(c.id)}
+                                    onChange={e => {
+                                      const newSet = new Set(selectedContactIds)
+                                      if (e.target.checked) {
+                                        newSet.add(c.id)
+                                      } else {
+                                        newSet.delete(c.id)
+                                      }
+                                      setSelectedContactIds(newSet)
+                                    }}
+                                  />
+                                </td>
                                 <td style={contactTd}><span style={contactNameCell}><span style={contactAvatar}>{(c.name || c.phone || '?').charAt(0).toUpperCase()}</span>{c.name || '—'}</span></td>
                                 <td style={contactTd}><span style={contactValue}><Phone size={15} />{c.phone}</span></td>
                                 <td style={contactTd}><span style={contactValue}><Mail size={15} />{c.email || '—'}</span></td>
@@ -854,7 +880,7 @@ function App() {
                               contacts.length > 0 && (
                                 <tr>
                                   <td
-                                    colSpan={5}
+                                    colSpan={6}
                                     style={{
                                       ...td,
                                       textAlign: 'center',
@@ -884,7 +910,7 @@ function App() {
                             {contacts.length === 0 && !loadingContacts && (
                               <tr>
                                 <td
-                                  colSpan={5}
+                                  colSpan={6}
                                   style={{
                                     ...td,
                                     textAlign: 'center',
@@ -954,6 +980,7 @@ function App() {
         open={campaignModalOpen}
         groupName={selectedGroup?.name ?? ''}
         contacts={contacts}
+        selectedContactIds={selectedContactIds.size > 0 ? selectedContactIds : undefined}
         submitLabel={sendCampaignImmediately ? 'Send now' : 'Save draft'}
         onClose={() => setCampaignModalOpen(false)}
         onSubmit={handleCreateCampaign}

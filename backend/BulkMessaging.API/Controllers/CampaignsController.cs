@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BulkMessaging.API.Services;
 using Microsoft.AspNetCore.Authorization;
+using System.Linq;
 namespace BulkMessaging.API.Controllers;
 
 [ApiController]
@@ -47,6 +48,16 @@ public class CampaignsController : ControllerBase
             return BadRequest("Subject is required for email campaigns.");
         }
 
+        // Filter contacts if specific IDs are provided
+        var targetContacts = dto.ContactIds != null && dto.ContactIds.Length > 0
+            ? group.Contacts.Where(c => dto.ContactIds.Contains(c.Id)).ToList()
+            : group.Contacts.ToList();
+
+        if (targetContacts.Count == 0)
+        {
+            return BadRequest("No contacts found for this campaign.");
+        }
+
         var campaign = new Campaign
         {
             GroupId = groupId,
@@ -55,12 +66,54 @@ public class CampaignsController : ControllerBase
             Body = dto.Body,
             Status = CampaignStatus.Draft,
             CreatedAt = DateTime.UtcNow,
-            TotalCount = group.Contacts.Count,
+            TotalCount = targetContacts.Count,
             SentCount = 0,
             FailedCount = 0,
         };
 
         _context.Campaigns.Add(campaign);
+        await _context.SaveChangesAsync();
+
+        // Always create messages for the target contacts
+        // This ensures SendCampaign knows exactly which contacts to send to
+        var messages = new List<Message>();
+        foreach (var contact in targetContacts)
+        {
+            if (campaign.Channel == MessageChannel.Sms &&
+                string.IsNullOrWhiteSpace(contact.Phone))
+            {
+                continue;
+            }
+            if (campaign.Channel == MessageChannel.Email &&
+                string.IsNullOrWhiteSpace(contact.Email))
+            {
+                continue;
+            }
+
+            var renderedBody = TemplateRenderer.Render(campaign.Body, contact);
+
+            messages.Add(new Message
+            {
+                CampaignId = campaign.Id,
+                ContactId = contact.Id,
+                ContactName = contact.Name,
+                Phone = contact.Phone,
+                Email = contact.Email,
+                Body = renderedBody,
+                Status = MessageStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+            });
+        }
+
+        if (messages.Count == 0)
+        {
+            _context.Campaigns.Remove(campaign);
+            await _context.SaveChangesAsync();
+            return BadRequest("No contact has a valid destination for this channel.");
+        }
+
+        campaign.TotalCount = messages.Count;
+        _context.Messages.AddRange(messages);
         await _context.SaveChangesAsync();
 
         return CreatedAtAction(
@@ -283,6 +336,7 @@ public class CampaignsController : ControllerBase
         var campaign = await _context.Campaigns
             .Include(c => c.Group)
                 .ThenInclude(g => g!.Contacts)
+            .Include(c => c.Messages)
             .FirstOrDefaultAsync(c => c.Id == id);
 
         if (campaign == null)
@@ -300,11 +354,25 @@ public class CampaignsController : ControllerBase
             return Conflict("Campaign has already been sent. Create a new one to resend.");
         }
 
-        var contacts = campaign.Group?.Contacts.ToList() ?? new List<Contact>();
+        // If messages already exist (from campaign creation), use those
+        // Otherwise, create from group contacts
+        List<Contact> contacts;
+        if (campaign.Messages.Any())
+        {
+            // Reuse existing messages - just need contacts for reference
+            var contactIds = campaign.Messages.Select(m => m.ContactId).Distinct().ToList();
+            contacts = await _context.Contacts
+                .Where(c => contactIds.Contains(c.Id))
+                .ToListAsync();
+        }
+        else
+        {
+            contacts = campaign.Group?.Contacts.ToList() ?? new List<Contact>();
+        }
 
         if (contacts.Count == 0)
         {
-            return BadRequest("The group has no contacts to send to.");
+            return BadRequest("The campaign has no contacts to send to.");
         }
 
         // Start
@@ -314,48 +382,54 @@ public class CampaignsController : ControllerBase
         campaign.SentCount = 0;
         campaign.FailedCount = 0;
 
-        // Create Pending messages
-        var messages = new List<Message>();
-        foreach (var contact in contacts)
+        // Create Pending messages if they don't exist
+        var messages = campaign.Messages.Any()
+            ? campaign.Messages.ToList()
+            : new List<Message>();
+
+        if (!campaign.Messages.Any())
         {
-            if (campaign.Channel == MessageChannel.Sms &&
-                string.IsNullOrWhiteSpace(contact.Phone))
+            foreach (var contact in contacts)
             {
-                continue;
+                if (campaign.Channel == MessageChannel.Sms &&
+                    string.IsNullOrWhiteSpace(contact.Phone))
+                {
+                    continue;
+                }
+                if (campaign.Channel == MessageChannel.Email &&
+                    string.IsNullOrWhiteSpace(contact.Email))
+                {
+                    continue;
+                }
+
+                var renderedBody = TemplateRenderer.Render(campaign.Body, contact);
+
+                messages.Add(new Message
+                {
+                    CampaignId = campaign.Id,
+                    ContactId = contact.Id,
+                    ContactName = contact.Name,
+                    Phone = contact.Phone,
+                    Email = contact.Email,
+                    Body = renderedBody,
+                    Status = MessageStatus.Pending,
+                    CreatedAt = DateTime.UtcNow,
+                });
             }
-            if (campaign.Channel == MessageChannel.Email &&
-                string.IsNullOrWhiteSpace(contact.Email))
+
+            if (messages.Count == 0)
             {
-                continue;
+                campaign.Status = CampaignStatus.Failed;
+                campaign.CompletedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                return BadRequest("No contact has a valid destination for this channel.");
             }
 
-            var renderedBody = TemplateRenderer.Render(campaign.Body, contact);
+            campaign.TotalCount = messages.Count;
 
-            messages.Add(new Message
-            {
-                CampaignId = campaign.Id,
-                ContactId = contact.Id,
-                ContactName = contact.Name,
-                Phone = contact.Phone,
-                Email = contact.Email,
-                Body = renderedBody,
-                Status = MessageStatus.Pending,
-                CreatedAt = DateTime.UtcNow,
-            });
-        }
-
-        if (messages.Count == 0)
-        {
-            campaign.Status = CampaignStatus.Failed;
-            campaign.CompletedAt = DateTime.UtcNow;
+            _context.Messages.AddRange(messages);
             await _context.SaveChangesAsync();
-            return BadRequest("No contact has a valid destination for this channel.");
         }
-
-        campaign.TotalCount = messages.Count;
-
-        _context.Messages.AddRange(messages);
-        await _context.SaveChangesAsync();
 
         // Send each
         int sent = 0;

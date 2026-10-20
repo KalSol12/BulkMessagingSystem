@@ -7,10 +7,10 @@ namespace BulkMessaging.API.Services;
 /// </summary>
 public class MessageSenderDispatcher
 {
-    private readonly SmsMessageSender _sms;
+    private readonly CustomSmsSender _sms;
     private readonly SmtpMessageSender _email;
 
-    public MessageSenderDispatcher(SmsMessageSender sms, SmtpMessageSender email)
+    public MessageSenderDispatcher(CustomSmsSender sms, SmtpMessageSender email)
     {
         _sms = sms;
         _email = email;

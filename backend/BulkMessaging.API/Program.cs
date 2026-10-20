@@ -11,11 +11,18 @@ using System.Text;
 using AfroMessage;
 using BulkMessaging.API.Models;
 using BulkMessaging.API.Authorization;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+
+
+
 
 // Database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -28,6 +35,7 @@ var jwtSigningKey = builder.Configuration["Jwt:SigningKey"];
 var tokenMinutes = builder.Configuration.GetValue<int?>("Jwt:AccessTokenMinutes") ?? 30;
 var bootstrapAdminEmail = builder.Configuration["BootstrapAdmin:Email"];
 var bootstrapAdminPassword = builder.Configuration["BootstrapAdmin:Password"];
+
 
 if (string.IsNullOrWhiteSpace(jwtSigningKey) ||
     Encoding.UTF8.GetByteCount(jwtSigningKey) < 32)
@@ -173,16 +181,11 @@ builder.Services.Configure<SmtpSettings>(
     builder.Configuration.GetSection("Smtp"));
 builder.Services.AddScoped<SmtpMessageSender>();
 
-// ---- AfroMessage (SMS) ----
-builder.Services.Configure<AfroMessageConfig>(
-    builder.Configuration.GetSection("AfroMessage"));
-
-// Register the AfroMessage HTTP client + services
-builder.Services.AddAfroMessage(
-    builder.Configuration.GetSection("AfroMessage").Get<AfroMessageConfig>()!);
-
-// ✅ THIS LINE WAS MISSING — register SmsMessageSender
-builder.Services.AddScoped<SmsMessageSender>();
+// ---- Custom SMS (SMS) ----
+builder.Services.Configure<CustomSmsSettings>(
+    builder.Configuration.GetSection("CustomSms"));
+builder.Services.AddHttpClient<CustomSmsSender>();
+builder.Services.AddScoped<CustomSmsSender>();
 
 // ---- Dispatcher ----
 builder.Services.AddScoped<MessageSenderDispatcher>();
@@ -243,12 +246,15 @@ await using (var scope = app.Services.CreateAsyncScope())
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
+     app.UseSwagger();
+    app.UseSwaggerUI();
+    app.MapScalarApiReference().AllowAnonymous();
 }
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseHttpsRedirection();
+    // app.UseHttpsRedirection();
 }
 
 app.UseCors("AllowFrontend");

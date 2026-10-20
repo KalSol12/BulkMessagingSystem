@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim()
 export const API_BASE = (
-  configuredApiBase || 'http://localhost:5101/api'
+  configuredApiBase || '/api'
 ).replace(/\/+$/, '')
 
 export const api = axios.create({
@@ -210,7 +210,7 @@ export const campaignsApi = {
   get: (id: number) =>
     api.get<CampaignDetail>(`/campaigns/${id}`).then(r => r.data),
 
-  create: (groupId: number, data: { channel: Channel; subject?: string; body: string }) =>
+  create: (groupId: number, data: { channel: Channel; subject?: string; body: string; contactIds?: number[] }) =>
     api.post<Campaign>(`/groups/${groupId}/campaigns`, data).then(r => r.data),
 
   send: (id: number) =>

@@ -39,14 +39,19 @@ public class DashboardController : ControllerBase
 
         // Messages stats
         var totalMessages = await _context.Messages.CountAsync();
-        var sentMessages = await _context.Messages.CountAsync(m => m.Status == Models.MessageStatus.Sent);
-        var failedMessages = await _context.Messages.CountAsync(m => m.Status == Models.MessageStatus.Failed);
+        var sentMessages = await _context.Messages.CountAsync(m =>
+            m.Status == Models.MessageStatus.Sent || m.Status == Models.MessageStatus.Delivered);
+        var failedMessages = await _context.Messages.CountAsync(m =>
+            m.Status == Models.MessageStatus.Failed || m.Status == Models.MessageStatus.Rejected);
         var sentMessagesToday = await _context.Messages.CountAsync(m =>
-            m.Status == Models.MessageStatus.Sent && m.SentAt >= startOfToday);
+            (m.Status == Models.MessageStatus.Sent || m.Status == Models.MessageStatus.Delivered) &&
+            m.SentAt >= startOfToday);
         var sentMessagesThisWeek = await _context.Messages.CountAsync(m =>
-            m.Status == Models.MessageStatus.Sent && m.SentAt >= startOfWeek);
+            (m.Status == Models.MessageStatus.Sent || m.Status == Models.MessageStatus.Delivered) &&
+            m.SentAt >= startOfWeek);
         var sentMessagesThisMonth = await _context.Messages.CountAsync(m =>
-            m.Status == Models.MessageStatus.Sent && m.SentAt >= startOfMonth);
+            (m.Status == Models.MessageStatus.Sent || m.Status == Models.MessageStatus.Delivered) &&
+            m.SentAt >= startOfMonth);
 
         var topGroups = await _context.Groups
             .Select(g => new
@@ -56,7 +61,8 @@ public class DashboardController : ControllerBase
                 contacts = g.Contacts.Count(),
                 messagesSent = g.Contacts
                     .SelectMany(c => _context.Messages
-                        .Where(m => m.ContactId == c.Id && m.Status == Models.MessageStatus.Sent))
+                        .Where(m => m.ContactId == c.Id &&
+                            (m.Status == Models.MessageStatus.Sent || m.Status == Models.MessageStatus.Delivered)))
                     .Count(),
             })
             .OrderByDescending(g => g.contacts)

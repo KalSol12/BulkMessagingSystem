@@ -9,6 +9,7 @@ public class CreateCampaignDto
     public MessageChannel Channel { get; set; }
     public string? Subject { get; set; }
     public string Body { get; set; } = string.Empty;
+    public int[]? ContactIds { get; set; }
 }
 
 // ---------- Responses ----------
